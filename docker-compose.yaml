@@ -1,0 +1,59 @@
+---
+version: '3.7'
+
+services:
+  keycloak:
+    image: jboss/keycloak
+    container_name: keycloak
+    restart: unless-stopped
+    command: ["-b", "0.0.0.0", "-Dkeycloak.profile.feature.docker=enabled"]
+    environment:
+      - KEYCLOAK_USER=${KEYCLOAK_USER}
+      - KEYCLOAK_PASSWORD=${KEYCLOAK_PASSWORD}
+      - PROXY_ADDRESS_FORWARDING=true
+      - KEYCLOAK_LOGLEVEL=INFO
+      - DB_VENDOR=mariadb
+      - DB_ADDR=mysql
+      - DB_DATABASE=${KEYCLOAK_DB}
+      - DB_USER=${KEYCLOAK_DB_USER}
+      - DB_PASSWORD=${KEYCLOAK_DB_PASS}
+      - TZ=${TZ:-Europe/Madrid}
+    networks:
+      - net
+      - traefik
+    depends_on:
+      - mysql
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=keycloak"
+      - "traefik.frontend.rule=Host:${KEYCLOAK_URL}"
+      - "traefik.frontend.passHostHeader=true"
+      - "traefik.port=8080"
+
+  mysql:
+    image: mariadb:10.3
+    restart: unless-stopped
+    container_name: keycloak-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASS}
+      - MYSQL_DATABASE=${KEYCLOAK_DB}
+      - MYSQL_USER=${KEYCLOAK_DB_USER}
+      - MYSQL_PASSWORD=${KEYCLOAK_DB_PASS}
+      - MYSQL_ALLOW_EMPTY_PASSWORD=no
+      - TZ=${TZ:-Europe/Madrid}
+    volumes:
+      - mysql:/var/lib/mysql
+    networks:
+      - net
+    healthcheck:
+      test: mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD && test '0' -eq $$(ps aux | awk '{print $$11}' | grep -c -e '^mysql$$')
+
+volumes:
+  mysql:
+
+networks:
+  net:
+  traefik:
+    external:
+      name: traefik
+
